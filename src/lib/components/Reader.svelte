@@ -3,16 +3,31 @@
   import { refreshAll } from '$app/navigation';
   import { api, ApiError } from '#lib/client.ts';
   import type { Song } from '#lib/types.ts';
-  import { keyOptions, transposeKey, noteValue } from '#lib/music.ts';
+  import { keyOptions, transposeKey, noteValue, transposeChord, preferFlats } from '#lib/music.ts';
   import Icon from './Icon.svelte';
   import Sheet from './Sheet.svelte';
+  import ChordVoicings from './ChordVoicings.svelte';
   import * as Select from './ui/select/index.ts';
   let { song }: { song: Song } = $props();
   let transpose = $state(untrack(() => song.preferredTranspose));
   $effect(() => { song.revision; transpose = song.preferredTranspose; });
-  let fontSize = $state(22);
-  let saving = $state(false); let status = $state(''); let conflict = $state(false);
   let currentKey = $derived(song.key ? transposeKey(song.key, transpose) : '');
+  let fontSize = $state(22);
+  let selection = $state<string | null>(null);
+  let chordButton: HTMLButtonElement | undefined;
+  let selectedChord = $derived(selection ? transposeChord(selection, transpose, currentKey ? preferFlats(currentKey) : undefined) : '');
+  function selectChord(chord: string, button: HTMLButtonElement) {
+    selection = [...song.body.matchAll(/\[([^\]\n]+)\]/g)].map(match => match[1]).find(original =>
+      transposeChord(original, transpose, currentKey ? preferFlats(currentKey) : undefined) === chord
+    ) ?? chord;
+    chordButton = button;
+  }
+  function closeChord() { selection = null; chordButton?.focus({ preventScroll: true }); }
+  function handleKey(event: KeyboardEvent) {
+    if (event.key === 'Escape' && selection && !document.querySelector('[role="dialog"], [role="listbox"]')) closeChord();
+  }
+
+  let saving = $state(false); let status = $state(''); let conflict = $state(false);
   let options = $derived([...new Set([currentKey, ...keyOptions.filter(k => k.endsWith('m') === song.key.endsWith('m') && noteValue(k) !== noteValue(currentKey))])].filter(Boolean));
   const offset = (n: number) => ((n % 12) + 12) % 12;
   function shift(n: number) { transpose = offset(transpose + n); status = ''; }
@@ -24,6 +39,7 @@
     finally { saving = false; }
   }
 </script>
+<svelte:window onkeydown={handleKey} />
 <div class="page reader-page">
   <header class="reader-heading">
     <a class="btn icon back no-print" href="/" aria-label="Terug naar bibliotheek" title="Bibliotheek"><Icon name="back" size={18} /></a>
@@ -58,12 +74,15 @@
   {#if status}<div class="message error no-print" role="alert">{status}{#if conflict} <button class="text-link" onclick={() => refreshAll()}>Opnieuw laden</button>{/if}</div>{/if}
   <article class="song-paper">
     <div class="print-meta">{#if currentKey}Toonsoort {currentKey}{/if}{#if song.capo} · Capo {song.capo}{/if}</div>
-    <Sheet body={song.body} {transpose} musicalKey={song.key} {fontSize} />
+    <div class="music-layout" class:with-piano={!!selection}>
+      <div class="music-content"><Sheet body={song.body} {transpose} musicalKey={song.key} {fontSize} {selectedChord} onchord={selectChord} /></div>
+      {#if selection}<div class="piano-panel no-print"><ChordVoicings chord={selectedChord} onclose={closeChord} /></div>{/if}
+    </div>
   </article>
   {#if /^https?:\/\//.test(song.sourceUrl)}<a class="source no-print" href={song.sourceUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" size={13} />Bron</a>{/if}
 </div>
 <style>
-  .reader-page { max-width: 1080px; padding: 8px 28px 40px; }
+  .reader-page { max-width: 1140px; padding: 8px 28px 40px; }
   .reader-heading { display: flex; align-items: center; gap: 8px; min-height: 44px; margin-bottom: 8px; }
   .song-title { display: flex; align-items: baseline; gap: 10px; flex: 1; min-width: 0; white-space: nowrap; }
   h1 { font-size: 21px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.02em; }
@@ -86,6 +105,14 @@
   .font-controls > span { flex: 1; }
   .capo { font-size: 13px; color: var(--color-muted); padding: 8px 9px; }
   .song-paper { padding: 16px 24px 20px; border: 1px solid var(--color-border); background: var(--color-surface); border-radius: 4px; }
+  .music-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; }
+  .music-layout.with-piano { grid-template-columns: minmax(0, 1fr) 350px; }
+  .music-content { min-width: 0; }
+  .piano-panel { position: sticky; top: 20px; max-height: calc(100dvh - 40px); overflow-y: auto; }
+  @media (max-width: 1100px) {
+    .music-layout.with-piano { grid-template-columns: minmax(0, 1fr); }
+    .piano-panel { grid-row: 1; top: 8px; z-index: 10; max-height: 45dvh; border-radius: 10px; box-shadow: 0 4px 16px #0000000a; }
+  }
   .source { display: inline-flex; gap: 6px; align-items: center; color: var(--color-muted); margin-top: 16px; font-size: 11px; }
   .print-meta { display: none; }
   @media (max-width: 700px) {
@@ -106,6 +133,7 @@
     .reader-options { grid-row: 2; grid-column: 4; }
   }
   @media print {
+    .music-layout.with-piano { display: block; }
     .reader-heading { margin-bottom: 18px; }
     .song-title { display: block; white-space: normal; }
     h1 { font-size: 26pt; overflow: visible; }

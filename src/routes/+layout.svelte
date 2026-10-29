@@ -4,6 +4,23 @@
   import Icon from '#lib/components/Icon.svelte';
   import CommandPalette from '#lib/components/CommandPalette.svelte';
   import { onMount } from 'svelte';
+  import InstrumentToggle from '#lib/components/InstrumentToggle.svelte';
+  import { provideInstrument, instrumentStorageKey, isInstrument } from '#lib/instrument.ts';
+  const instrument = provideInstrument();
+  onMount(() => {
+    try {
+      const saved = localStorage.getItem(instrumentStorageKey);
+      if (isInstrument(saved)) instrument.set(saved);
+    } catch { /* Storage can be disabled; the toggle still works for this session. */ }
+    const unsubscribe = instrument.subscribe(value => {
+      try { localStorage.setItem(instrumentStorageKey, value); } catch { /* Keep the in-memory preference. */ }
+    });
+    const sync = (event: StorageEvent) => {
+      if (event.key === instrumentStorageKey || event.key === null) instrument.set(isInstrument(event.newValue) ? event.newValue : 'piano');
+    };
+    window.addEventListener('storage', sync);
+    return () => { unsubscribe(); window.removeEventListener('storage', sync); };
+  });
   let paletteOpen = $state(false);
   let shortcut = $state('Ctrl K');
   onMount(() => { if (/Mac|iPhone|iPad/.test(navigator.platform)) shortcut = '⌘ K'; });
@@ -20,15 +37,24 @@
       <a href="/ontdekken" class:active={discover} aria-current={discover ? 'page' : undefined}><Icon name="search" />Toevoegen</a>
     </nav>
     <button class="palette-trigger" onclick={() => paletteOpen = true} aria-label="Zoeken en toevoegen" aria-keyshortcuts="Meta+k Control+k"><Icon name="search" size={18} /><span>Zoeken</span><kbd>{shortcut}</kbd></button>
+    <div class="sidebar-instrument no-print"><InstrumentToggle /></div>
   </aside>
   <header class="app-mobile">
     <a class="brand" href="/"><span class="brand-mark"><Icon name="music" size={18} /></span>bladmuziek<span class="brand-dot">.</span></a>
     <nav aria-label="Hoofdnavigatie"><a href="/" class:active={!discover} aria-label="Bibliotheek"><Icon name="library" /></a><button class="mobile-search" onclick={() => paletteOpen = true} aria-label="Zoeken en toevoegen"><Icon name="search" /></button><a href="/ontdekken" class:active={discover} aria-label="Toevoegen"><Icon name="external" /></a></nav>
   </header>
+  <div class="mobile-instrument no-print"><InstrumentToggle /></div>
   <main class="app-main" id="main">{@render children()}</main>
 </div>
 <CommandPalette bind:open={paletteOpen} />
 <style>
+  .sidebar-instrument { margin-top: auto; padding-top: 24px; align-self: flex-end; }
+  .mobile-instrument { display: none; }
+  @media (max-width: 700px) {
+    .mobile-instrument { display: block; position: fixed; bottom: max(12px, env(safe-area-inset-bottom)); right: 12px; z-index: 25; border-radius: 8px; box-shadow: 0 2px 12px #00000015; }
+    .app-main { padding-bottom: 72px; }
+  }
+  @media print { .app-main { padding-bottom: 0; } }
   .palette-trigger { display: flex; align-items: center; gap: 10px; margin-top: 22px; padding: 11px 12px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); font-size: 13px; color: var(--color-muted); }
   .palette-trigger:hover { border-color: var(--color-border-strong); color: var(--color-ink); }
   .palette-trigger kbd { margin-left: auto; border: 1px solid var(--color-border); border-radius: 4px; padding: 2px 4px; font: 10px var(--font-sans); white-space: nowrap; }
