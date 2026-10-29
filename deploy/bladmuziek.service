@@ -1,0 +1,26 @@
+[Unit]
+Description=Bladmuziek
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/bert/Projects/bertspaan/bladmuziek
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=3100
+Environment=MUSIC_DIR=/home/bert/Documents/Obsidian/Bladmuziek
+Environment=BODY_SIZE_LIMIT=1M
+ExecStart=/home/bert/.local/share/mise/installs/node/26.8.2/bin/node build
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/bert/Documents/Obsidian/Bladmuziek
+
+[Install]
+WantedBy=default.target

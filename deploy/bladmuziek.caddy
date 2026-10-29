@@ -1,0 +1,4 @@
+@bladmuziek host bladmuziek.mini.bertspaan.nl
+handle @bladmuziek {
+	reverse_proxy 127.0.0.1:3100
+}
